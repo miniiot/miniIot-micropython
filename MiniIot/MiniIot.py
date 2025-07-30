@@ -4,19 +4,23 @@ import sys
 import os
 
 import machine
+import time
 import ubinascii
+import network
+import utime
 
-from .config import Config
+from .config import Config, WorkState
 from .core.gpio_helper import GPIOHelper
 from .core.miniIot_wifi import MiniIotWifi
 from .MiniIotMessage import MiniIotMessage
+from .MiniIotMQTT import MiniIotMQTT
 
 
 class MiniIot:
 
     def __init__(self):
         # 主进程工作状态
-        self._work_state = 0
+        self._work_state: WorkState = WorkState.INIT
         # 服务器重连次数
         self._server_err_num = 0
         # mqtt重连间隔
@@ -29,6 +33,7 @@ class MiniIot:
         self._device_id = ""
 
         self.miniIotWifi = MiniIotWifi()
+        self.miniIotClient = MiniIotMQTT()
 
     def init(self):
         GPIOHelper.init(Config.MiniIot_STATE_LED)
@@ -55,7 +60,7 @@ class MiniIot:
             print("[SYSTEM] 修改wifi")
             if Config.UseWifiClient:
                 self.miniIotWifi.update(dataObj["serviceParams"]["ssid"], dataObj["serviceParams"]["passwd"])
-                # todo
+                self.miniIotClient.disconnect()
                 machine.reset()
 
         elif serviceName == "miniiot_ota_update":
@@ -67,16 +72,17 @@ class MiniIot:
 
         elif serviceName == "miniiot_reboot":
             print("[SYSTEM] 重启")
-            # todo
+            self.miniIotClient.disconnect()
             machine.reset()
 
         else:
             print("[SYSTEM] 未知事件")
 
     def begin(self, product_id, secret, device_id=None):
-
+        secret_type = "2"
         if device_id == None:
             device_id = "A" + ubinascii.hexlify(machine.unique_id()).decode().upper()
+            secret_type = "1"
 
 
         print("[MiniIot] 库版本：" + str(Config.MiniIot_VERSION))
@@ -87,6 +93,78 @@ class MiniIot:
         self._product_id = product_id
         self._device_id = device_id
 
-        # todo
+        self.miniIotClient.begin(product_id,device_id,secret, secret_type)
 
         self.init()
+
+    def attach(self, func):
+        MiniIotMessage.setAppCallback(func)
+
+    def loop(self):
+        if Config.UseAdminService:
+            pass
+
+        match self._work_state:
+            case WorkState.INIT:
+                self._work_state = WorkState.NETWORK_CONNECTING
+            case WorkState.NETWORK_CONNECTING:
+                if Config.UseWifiClient:
+                    if self.miniIotWifi.wifiConnect() == True:
+                        self._server_reconnect_time = 1000 * 2
+                        self._server_err_num = 0
+                        self._work_state = WorkState.SERVER_CONNECTING
+                    else:
+                        self._work_state = WorkState.NETWORK_ERROR
+                else:
+                    pass
+
+            case WorkState.SERVER_CONNECTING:
+                if Config.UseWifiClient:
+                    if self.miniIotClient.mqttConnect(self.miniIotWifi.getWifiMac()):
+                        self._server_err_num = 0
+                        self._work_state = WorkState.WORKING
+                    else:
+                        self._server_err_num +=1
+                        self._work_state = WorkState.SERVER_ERROR
+
+                else:
+                    pass
+
+            case WorkState.WORKING:
+                self.miniIotClient.loop()
+                if not self.miniIotClient.is_connect():
+                    if Config.UseWifiClient:
+                        if self.miniIotWifi.getStatus() != network.STAT_GOT_IP:
+                            self._work_state = WorkState.NETWORK_ERROR
+                        else:
+                            self._work_state = WorkState.SERVER_ERROR
+                    else:
+                        pass
+
+            case WorkState.SERVER_ERROR:
+                if self._server_err_num > 5:
+                    self._server_reconnect_time = 1000 * 30
+                if time.ticks_ms() - self._server_connect_time > self._server_reconnect_time:
+                    self._work_state = WorkState.SERVER_CONNECTING
+                    self._server_connect_time = time.ticks_ms()
+
+                if Config.UseWifiClient:
+                    if self.miniIotWifi.getStatus() != network.STAT_GOT_IP:
+                        self._work_state = WorkState.NETWORK_ERROR
+                else:
+                    pass
+
+            case WorkState.NETWORK_ERROR:
+                self._work_state = WorkState.NETWORK_CONNECTING
+
+    def running(self):
+        return self._work_state == WorkState.WORKING
+
+    def delay(self,ms:int):
+        start = time.ticks_ms()
+        while time.ticks_ms() - start < ms:
+            if self._work_state == WorkState.WORKING:
+                self.loop()
+            utime.sleep(0)
+
+

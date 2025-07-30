@@ -14,6 +14,7 @@ class Config:
     MiniIot_ADMIN_SERVICE_PORT: int = 10101
 
     MiniIot_HTTP_HOST: str = "service.miniiot.top"
+    MiniIot_MQTT_HOST_IS_IP: bool = True
     MiniIot_MQTT_HOST: str = "mqtt.miniiot.top"
     MiniIot_MQTT_PORT: int = 2082
 

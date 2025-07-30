@@ -15,7 +15,7 @@ class MiniIotMessage:
         cls._sys_callback = func
 
     @classmethod
-    def handleMessage(cls, topic, payload, length):
+    def handleMessage(cls, topic, payload):
 
         print("[MQTT] 收到消息：\n主题: " + str(topic) + "\n内容:" + str(payload))
 
