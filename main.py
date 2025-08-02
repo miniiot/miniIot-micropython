@@ -1,20 +1,26 @@
+import utime
+
 from MiniIot import MiniIot,GPIOHelper
 
+ping_count = 0
 
-def serviceCallbackFunction(data):
-    print(data)
-
-
+def serviceCallbackFunction(data:dict):
+    global ping_count, miniIot
+    serviceName = data["serviceName"]
+    if serviceName == "miniiot_ping":
+        miniIot.propertyPost("num_1",ping_count)
+        ping_count+=1
 
 
 if __name__ == '__main__':
-    print("----------")
     miniIot = MiniIot()
-    miniIot.begin("ZnnQmFTH","h5Tmn1l3m2S9DY2I")
+    miniIot.begin("MHHAABQc","jNrE1bdPIQk3SeeV")
     miniIot.attach(serviceCallbackFunction)
 
     while True:
         miniIot.loop()
 
         if miniIot.running():
-            miniIot.delay(3000)
+            # miniIot.delay(3000)
+            utime.sleep_ms(1000)
+

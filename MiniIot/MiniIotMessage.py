@@ -15,20 +15,20 @@ class MiniIotMessage:
         cls._sys_callback = func
 
     @classmethod
-    def handleMessage(cls, topic, payload):
+    def handleMessage(cls, topic:bytes, payload:bytes):
 
-        print("[MQTT] 收到消息：\n主题: " + str(topic) + "\n内容:" + str(payload))
+        print("[MQTT] 收到消息：\n主题: " + str(topic.decode()) + "\n内容:" + str(payload.decode()))
 
         try:
-            msg_data = ujson.loads(payload)
+            msg_data = ujson.loads(payload.decode())
         except :
-            print("[MQTT] JSON解析错误: " + str(payload))
+            print("[MQTT] JSON解析错误: " + str(payload.decode()))
             return
 
-        for key in msg_data.keys():
-            if key not in ["id", "version", "method", "params"]:
-                print("[MQTT] JSON缺少必要字段")
-                return
+        keys = msg_data.keys()
+        if "id" not in keys or "version" not in keys or "method" not in keys or "params" not in keys:
+            print("[MQTT] JSON缺少必要字段")
+            return
 
         if msg_data['version'] != "1.0":
             print("[MQTT] 协议版本不支持")

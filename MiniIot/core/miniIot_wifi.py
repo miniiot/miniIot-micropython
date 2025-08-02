@@ -4,6 +4,7 @@ import os
 
 import time
 import ujson
+import utime
 from machine import Pin
 
 from ..config import Config
@@ -33,6 +34,7 @@ class MiniIotWifi:
         # self._led_pin = Pin(Config.MiniIot_STATE_LED,Pin.OUT)
 
 
+
     def loadConfig(self):
         if not exists_file(self._config_name):
             print("[WIFI] 无法打开配置文件：")
@@ -52,7 +54,7 @@ class MiniIotWifi:
 
 
     def write(self):
-
+        print("write")
         try:
             data = ujson.dumps(self._json_data)
             with open(self._config_name, "w") as f:
@@ -71,15 +73,15 @@ class MiniIotWifi:
             self.loadConfig()
             self._wlan.active(True)
             self._wlan.connect(self._json_data['ssid'], self._json_data['passwd'])
-            print("[WIFI] WIFI连接中")
+            print("[WIFI] WIFI连接中",end="")
 
         if self._connect_led_time == 0:
             self._connect_led_time = time.ticks_ms()
-            print(".")
+            print(".",end="")
             # self._led_pin.value(0 if self._led_pin.value() == 1 else 1)
             GPIOHelper.toggle(Config.MiniIot_STATE_LED)
 
-        if self._wlan.status() != network.STAT_CONNECTING:
+        if not self._wlan.isconnected():
             if time.ticks_ms() - self._connect_led_time >= 1000:
                 self._connect_led_time = 0
             if time.ticks_ms() - self._connect_time >= 10*1000:
@@ -90,26 +92,31 @@ class MiniIotWifi:
             return False
 
         print("")
-        print("[WIFI] WIFI连接成功,IP: ")
-        print(self._wlan.ifconfig()[0])
+        print("[WIFI] WIFI连接成功,IP: ",self._wlan.ifconfig()[0])
+        # print(self._wlan.ifconfig()[0])
         # print("[WIFI] WIFI连接成功,MAC: ")
         # print(self._wlan.ifconfig())
         self._connect_time = 0
         return True
 
+    def getWifiIp(self):
+        return self._wlan.ifconfig()[0]
+
     def getWifiMac(self):
-        return self._wlan.config("mac")
+        return ':'.join('%02x' % b for b in self._wlan.config("mac"))
 
     def getStatus(self):
         return self._wlan.status()
+
+    def isConnect(self):
+        return self._wlan.isconnected()
 
     def clear(self):
         if not exists_file(self._config_name):
             print("[WIFI] 配置不存在")
             return
         os.remove(self._config_name)
-        print("[WIFI] 配置清除成功：")
-        print(self._config_name)
+        print("[WIFI] 配置清除成功:", self._config_name)
 
 
     def update(self,ssid, passwd):
@@ -117,3 +124,5 @@ class MiniIotWifi:
         self._json_data['passwd'] = passwd
         self.write()
 
+    def disconnect(self):
+        self._wlan.disconnect()
