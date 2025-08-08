@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
-
+import machine
+import ubinascii
 
 def exists_file(path: str) -> bool:
     """
@@ -15,3 +16,7 @@ def exists_file(path: str) -> bool:
         return True
     except OSError as e:
         return False
+
+
+def getDeviceId():
+    return str(ubinascii.hexlify(machine.unique_id()).decode().upper())
